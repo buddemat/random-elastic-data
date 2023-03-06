@@ -1,5 +1,7 @@
+from random import randint
 import uuid
 from datetime import datetime
+from pyzufall.person import Person
 
 class RandomPerson:
     """Class for random person"""
@@ -11,4 +13,10 @@ class RandomPerson:
         self.uuid = uuid
         self.num_id = RandomPerson._instance_count
 
-
+        p = Person()
+        self.firstname = p.vorname
+        self.lastname = p.nachname
+        self.nested_name = { 'first': p.vorname, 'last': p.nachname }
+        # ~2% should be diverse
+        self.gender = 'diverse' if randint(0,100) < 2 else ('male' if p.geschlecht else 'female')
+        self.birthname = p.geburtsname if p.geburtsname != p.nachname else None 
