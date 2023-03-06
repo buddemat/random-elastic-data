@@ -12,11 +12,11 @@ class RandomPerson:
     """Class for random person"""
     _instance_count = 0
 
-    def __init__(self, uuid=str(uuid.uuid1())):
+    def __init__(self, uuid=str(uuid.uuid1()), num_id=None):
         RandomPerson._instance_count += 1
         self.created_at = datetime.today().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
         self.uuid = uuid
-        self.num_id = RandomPerson._instance_count
+        self.num_id = num_id if num_id else RandomPerson._instance_count
 
         p = Person()
         self.firstname = p.vorname
