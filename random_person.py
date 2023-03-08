@@ -1,5 +1,3 @@
-import sys
-sys.path.append('/home/budde/noscan/PyZufall')
 import json
 from random import randint
 import uuid
