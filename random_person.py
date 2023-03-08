@@ -1,3 +1,5 @@
+import sys
+sys.path.append('/home/budde/noscan/PyZufall')
 import json
 from random import randint
 import uuid
@@ -28,13 +30,14 @@ class RandomPerson:
         self.date_of_birth = p.geburtsdatum
         # ~2% should be diverse
         self.gender = 'diverse' if randint(0,100) < 2 else ('male' if p.geschlecht else 'female')
-        self.birthname = p.geburtsname if p.geburtsname != p.nachname else None
+        if p.geburtsname != p.nachname:
+            self.birthname = p.geburtsname
         self.birthplace = p.geburtsort
         self.email_address = p.email
         self.ip_address = faker.ipv4()
         # ~10% should be lefthanded
         self.lefthanded = bool(randint(0,100) < 10)
-
+ 
     def to_dict(self):
         return vars(self)
 
