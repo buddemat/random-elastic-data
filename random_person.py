@@ -1,3 +1,6 @@
+'''
+Module that generates random (German) persons, built on PyZufall.
+'''
 import json
 from random import randint
 import uuid

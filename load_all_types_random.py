@@ -1,3 +1,7 @@
+#!/usr/bin/env python3
+'''
+Module that generates random documents containing ficticious person and random numerical data.
+'''
 from random import randint, getrandbits, uniform
 import base64
 import random_person as rp
@@ -9,7 +13,7 @@ def document_stream(idx_name, amount):
     for n in range(1, amount+1):
         p = rp.RandomPerson()
         yield {"_index": idx_name,
-               "_source": { 'uuid': p.uuid, 
+               "_source": { 'uuid': p.uuid,
                             'num_id': n,
                             'created_at': p.created_at,
                             'firstname': p.firstname,
