@@ -31,6 +31,7 @@ class RandomPerson:
         if p.geburtsname != p.nachname:
             self.birthname = p.geburtsname
         self.birthplace = p.geburtsort
+        self.city = p.wohnort
         self.email_address = p.email
         self.ip_address = faker.ipv4()
         # ~10% should be lefthanded

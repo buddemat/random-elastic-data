@@ -1,4 +1,5 @@
 from random import randint, getrandbits, uniform
+import base64
 import random_person as rp
 
 
@@ -27,6 +28,7 @@ def document_stream(idx_name, amount):
                             'some_const_keyword': 'random',
                             'some_epoch_date': randint(1000000000000,9999999999999),
                             'some_bool': bool(getrandbits(1)),
+                            'some_binary': str(base64.b64encode(p.city.encode('utf-8')))[2:-1],
                             'some_long': randint(-2^63,2^63-1),
                             'some_int': randint(-2^63,2^63-1),
                             'some_short': randint(-32768, 32767),
