@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 '''
-Module that generates random documents containing ficticious person and random numerical data.
+Module that generates random documents containing ficticious person and random
+numerical data and uploads them to Elasticsearch using the _bulk API. The goal
+is to have demo and testing data covering most data types.
 '''
+import json
 from random import randint, getrandbits, uniform
 import base64
+import elasticsearch as es
 import random_person as rp
 
 
@@ -45,9 +49,31 @@ def document_stream(idx_name, amount):
                           }
                }
 
+
+
 def main():
     ''' main function '''
-    for person_dict in document_stream('all_types_random-1', 10):
+    elastic_host = 'localhost'
+    elastic_port = 9200
+    elastic_user = None
+    elastic_pass = None
+
+    es_client = es.Elasticsearch([f'https://{elastic_host}:{elastic_port}'],
+                                  basic_auth=(f'{elastic_user}', f'{elastic_pass}'))
+
+    index_name = 'all_types_random-1'
+
+    with open('mapping.json', 'r', encoding='utf-8') as mapping_file:
+        mapping = json.load(mapping_file)
+
+        # create index with mapping
+        response = es_client.options(ignore_status=[400]).indices.create(
+            index = index_name,
+            mappings = mapping
+        )
+        print(response)
+
+    for person_dict in document_stream(index_name, 10):
         print(person_dict)
 
 if __name__ == "__main__":

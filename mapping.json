@@ -1,0 +1,175 @@
+{
+    "properties": {
+        "created_at": {
+            "type": "date",
+            "format": "yyyy-MM-dd HH:mm:ss.SSS"
+        },
+        "uuid": {
+            "type": "text",
+            "fields": {
+                "keyword": {
+                    "type": "keyword",
+                    "ignore_above": 64
+                }
+            }
+        },
+        "num_id": {
+            "type": "integer"
+        },
+        "person_xml": {
+            "type": "text",
+            "fields": {
+                "keyword": {
+                    "type": "keyword",
+                    "ignore_above": 8191
+                }
+            }
+        },
+        "person_json": {
+            "type": "text",
+            "fields": {
+                "keyword": {
+                    "type": "keyword",
+                    "ignore_above": 8191
+                }
+            }
+        },
+        "firstname": {
+            "type": "text",
+            "fields": {
+                "keyword": {
+                    "type": "keyword",
+                    "ignore_above": 256
+                }
+            }
+        },
+        "lastname": {
+            "type": "text",
+            "fields": {
+                 "keyword": {
+                     "type": "keyword",
+                     "ignore_above": 256
+                 }
+            }
+        },
+        "nested_name": {
+            "type": "nested",
+            "properties": {
+                "first": {
+                    "type": "text"
+                },
+                "last": {
+                    "type": "text"
+                }
+            }
+        },
+        "birthname": {
+            "type": "text",
+            "fields": {
+                "keyword": {
+                    "type": "keyword",
+                    "ignore_above": 8191
+                }
+            }
+        },
+        "birthplace": {
+            "type": "text",
+            "fields": {
+                "keyword": {
+                    "type": "keyword",
+                    "ignore_above": 8191
+                }
+            }
+        },
+        "nickname": {
+            "type": "text",
+            "fields": {
+                "keyword": {
+                    "type": "keyword",
+                    "ignore_above": 8191
+                }
+            }
+        },
+        "age": {
+            "type": "byte"
+        },
+        "gender": {
+            "type": "keyword"
+        },
+        "date_of_birth": {
+            "type": "date",
+            "format": "dd.MM.yyyy"
+        },
+        "email_address": {
+            "type": "keyword"
+        },
+        "ip_address": {
+            "type": "ip"
+        },
+        "lefthanded": {
+            "type": "boolean"
+        },
+        "some_const_keyword": {
+            "type": "constant_keyword",
+            "value": "random"
+        },
+        "some_text_without_multi_field": {
+            "type": "text"
+        },
+        "some_text_with_array_multifield_content": {
+            "type": "text",
+            "fields": {
+                "keyword": {
+                    "type": "keyword",
+                    "ignore_above": 8191
+                }
+            }
+        },
+        "some_text_with_ignored_keyword": {
+            "type": "text",
+            "fields": {
+                "keyword": {
+                    "type": "keyword",
+                    "ignore_above": 1
+                }
+            }
+        },        "some_epoch_date": {
+            "type": "date",
+            "format": "epoch_millis"
+        },
+        "some_binary": {
+            "type": "binary"
+        },
+        "some_bool": {
+            "type": "boolean"
+        },
+        "some_long": {
+            "type": "long"
+        },
+        "some_int": {
+            "type": "integer"
+        },
+        "some_short": {
+            "type": "short"
+        },
+        "some_byte": {
+            "type": "byte"
+        },
+        "some_unsigned_long": {
+            "type": "unsigned_long"
+        },
+        "some_double": {
+            "type": "double"
+        },
+        "some_float": {
+            "type": "float"
+        },
+        "some_half_float": {
+            "type": "half_float"
+        },
+        "some_scaled_float": {
+            "type": "scaled_float",
+            "scaling_factor": 100
+        }
+    }
+}
