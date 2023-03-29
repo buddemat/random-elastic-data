@@ -50,9 +50,6 @@ def document_stream(idx_name, amount):
                             'person_xml': p.to_xml(),
                             'person_json': p.to_json(),
                             'some_const_keyword': 'random',
-                            #'some_text_without_multi_field': essen(),
-                            #'some_text_with_array_multifield_content': [essen(), essen(), essen()],
-                            #'some_text_with_ignored_keyword': faker.paragraph(nb_sentences = 20),
                             'some_epoch_date': randint(1000000000000,9999999999999),
                             'some_bool': bool(getrandbits(1)),
                             'some_binary': str(base64.b64encode(p.city.encode('utf-8')))[2:-1],
@@ -68,6 +65,20 @@ def document_stream(idx_name, amount):
                           }
                }
 
+def init_es_index(es_client, idx_name, replace=False):
+    ''' create the initial index '''
+    if replace:
+        es_client.options(ignore_status=[400,404]).indices.delete(index=idx_name)
+
+    with open('mapping.json', 'r', encoding='utf-8') as mapping_file:
+        mapping = json.load(mapping_file)
+
+        # create index with mapping
+        response = es_client.options(ignore_status=[400]).indices.create(
+            index = idx_name,
+            mappings = mapping
+        )
+        return response
 
 
 def main():
@@ -75,23 +86,16 @@ def main():
     # load options
     options = load_options()
 
-
     es_client = es.Elasticsearch([options.get('es_url')],
                                   basic_auth=(f'{options.get("es_user")}',
                                               f'{options.get("es_pass")}')
                                   )
 
-    with open('mapping.json', 'r', encoding='utf-8') as mapping_file:
-        mapping = json.load(mapping_file)
+    init_es_index(es_client, options.get('index_name'), replace=True)
 
-        # create index with mapping
-        response = es_client.options(ignore_status=[400]).indices.create(
-            index = options.get('index_name'),
-            mappings = mapping
-        )
-        print(response)
+    stream = document_stream(options.get('index_name'), 10)
 
-    for person_dict in document_stream(options.get('index_name'), 10):
+    for person_dict in stream:
         print(person_dict)
 
 if __name__ == '__main__':
