@@ -8,6 +8,7 @@ import json
 from random import randint, getrandbits, uniform
 import base64
 import elasticsearch as es
+from elasticsearch import helpers
 import random_person as rp
 
 
@@ -95,8 +96,10 @@ def main():
 
     stream = document_stream(options.get('index_name'), 10)
 
-    for person_dict in stream:
-        print(person_dict)
+    for ok, response in helpers.streaming_bulk(es_client, actions=stream):
+        if not ok:
+            # failure inserting
+            print(response)
 
 if __name__ == '__main__':
     main()

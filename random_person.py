@@ -47,4 +47,4 @@ class RandomPerson:
         return json.dumps(self.to_dict(), indent=4, ensure_ascii=False)
 
     def to_xml(self):
-        return dicttoxml(self.to_dict())
+        return dicttoxml(self.to_dict()).decode('utf-8')
