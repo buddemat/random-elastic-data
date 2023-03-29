@@ -11,7 +11,23 @@ import elasticsearch as es
 import random_person as rp
 
 
-# create document generator
+def load_options():
+    ''' load options from yaml file or environment vars '''
+    opt_dict = {}
+
+    opt_dict['es_scheme'] = 'http'
+    opt_dict['es_host'] = 'localhost'
+    opt_dict['es_port'] = 9200
+    opt_dict['es_user'] = None
+    opt_dict['es_pass'] = None
+
+    opt_dict['index_name'] = 'all_types_random-2'
+
+    # build full url
+    opt_dict['es_url'] = f'{opt_dict["es_scheme"]}://{opt_dict["es_host"]}:{opt_dict["es_port"]}'
+
+    return opt_dict
+
 def document_stream(idx_name, amount):
     ''' generator function for stream of json documents / dicts with random persons '''
     for n in range(1, amount+1):
@@ -34,6 +50,9 @@ def document_stream(idx_name, amount):
                             'person_xml': p.to_xml(),
                             'person_json': p.to_json(),
                             'some_const_keyword': 'random',
+                            #'some_text_without_multi_field': essen(),
+                            #'some_text_with_array_multifield_content': [essen(), essen(), essen()],
+                            #'some_text_with_ignored_keyword': faker.paragraph(nb_sentences = 20),
                             'some_epoch_date': randint(1000000000000,9999999999999),
                             'some_bool': bool(getrandbits(1)),
                             'some_binary': str(base64.b64encode(p.city.encode('utf-8')))[2:-1],
@@ -53,28 +72,27 @@ def document_stream(idx_name, amount):
 
 def main():
     ''' main function '''
-    elastic_host = 'localhost'
-    elastic_port = 9200
-    elastic_user = None
-    elastic_pass = None
+    # load options
+    options = load_options()
 
-    es_client = es.Elasticsearch([f'https://{elastic_host}:{elastic_port}'],
-                                  basic_auth=(f'{elastic_user}', f'{elastic_pass}'))
 
-    index_name = 'all_types_random-1'
+    es_client = es.Elasticsearch([options.get('es_url')],
+                                  basic_auth=(f'{options.get("es_user")}',
+                                              f'{options.get("es_pass")}')
+                                  )
 
     with open('mapping.json', 'r', encoding='utf-8') as mapping_file:
         mapping = json.load(mapping_file)
 
         # create index with mapping
         response = es_client.options(ignore_status=[400]).indices.create(
-            index = index_name,
+            index = options.get('index_name'),
             mappings = mapping
         )
         print(response)
 
-    for person_dict in document_stream(index_name, 10):
+    for person_dict in document_stream(options.get('index_name'), 10):
         print(person_dict)
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
