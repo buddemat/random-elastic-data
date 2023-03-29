@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 '''
-Module that generates random documents containing ficticious person and random
+Module that generates random documents containing ficticious persons and random
 numerical data and uploads them to Elasticsearch using the _bulk API. The goal
 is to have demo and testing data covering most data types.
 '''
@@ -9,11 +9,15 @@ from random import randint, getrandbits, uniform
 import base64
 import elasticsearch as es
 from elasticsearch import helpers
+from faker import Faker
 import random_person as rp
+
+faker = Faker()
 
 
 def load_options():
     ''' load options from yaml file or environment vars '''
+    # init empty dict
     opt_dict = {}
 
     opt_dict['es_scheme'] = 'http'
@@ -51,6 +55,11 @@ def document_stream(idx_name, amount):
                             'person_xml': p.to_xml(),
                             'person_json': p.to_json(),
                             'some_const_keyword': 'random',
+                            'some_text_without_multi_field': p.favorite_food,
+                            'some_text_with_array_multifield_content': [p.favorite_food,
+                                                                        p.favorite_color,
+                                                                        p.occupation],
+                            'some_text_with_ignored_keyword': faker.paragraph(nb_sentences = 20),
                             'some_epoch_date': randint(1000000000000,9999999999999),
                             'some_bool': bool(getrandbits(1)),
                             'some_binary': str(base64.b64encode(p.city.encode('utf-8')))[2:-1],
@@ -69,6 +78,7 @@ def document_stream(idx_name, amount):
 def init_es_index(es_client, idx_name, replace=False):
     ''' create the initial index '''
     if replace:
+        # delete (possibly) existing index
         es_client.options(ignore_status=[400,404]).indices.delete(index=idx_name)
 
     with open('mapping.json', 'r', encoding='utf-8') as mapping_file:
@@ -96,9 +106,9 @@ def main():
 
     stream = document_stream(options.get('index_name'), 10)
 
-    for ok, response in helpers.streaming_bulk(es_client, actions=stream):
-        if not ok:
-            # failure inserting
+    for status_ok, response in helpers.streaming_bulk(es_client, actions=stream):
+        if not status_ok:
+            # if failure inserting
             print(response)
 
 if __name__ == '__main__':

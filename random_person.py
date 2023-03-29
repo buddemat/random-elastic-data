@@ -26,7 +26,7 @@ class RandomPerson:
         self.lastname = p.nachname
         self.nested_name = { 'first': p.vorname, 'last': p.nachname }
         self.nickname = p.nickname
-        # TODO: make age attribute into property
+        # TODO: make age attribute into property?
         self.age = p.alter
         self.date_of_birth = p.geburtsdatum
         # ~2% should be diverse
@@ -35,8 +35,14 @@ class RandomPerson:
             self.birthname = p.geburtsname
         self.birthplace = p.geburtsort
         self.city = p.wohnort
+        self.occupation = p.beruf
+        self.interests = p.interessen
+        self.favorite_color = p.lieblingsfarbe
+        self.favorite_food = p.lieblingsessen
+        self.motto = p.motto
         self.email_address = p.email
         self.ip_address = faker.ipv4()
+        self.homepage = p.homepage
         # ~10% should be lefthanded
         self.lefthanded = bool(randint(0,100) < 10)
  
