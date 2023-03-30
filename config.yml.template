@@ -1,0 +1,18 @@
+logging:
+    stdout: True
+    filename: load_all_types_random.log
+    lvl: INFO
+
+elastic:
+    scheme: http
+    host: localhost
+    port: 9200
+    user: elastic
+    pass: secret
+    index_name: all_types_random-1
+    
+generation:
+    n_documents: 1000
+    id_offset: 0
+
+

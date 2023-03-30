@@ -10,9 +10,11 @@ Date: 2023
 
 import logging
 import sys
+import os
 import json
 from random import randint, getrandbits, uniform
 import base64
+import yaml
 import elasticsearch as es
 from elasticsearch import helpers
 from faker import Faker
@@ -23,12 +25,16 @@ faker = Faker()
 
 def load_options():
     ''' load options from yaml file or environment vars '''
+
+    config_filename = './config.yml'
+
     # init empty dict
     opt_dict = {}
     opt_dict['logging'] = {}
     opt_dict['elastic'] = {}
     opt_dict['generation'] = {}
 
+    # standard values ??
     opt_dict['logging']['stdout'] = True
     opt_dict['logging']['filename'] = 'load_all_types_random.log'
     opt_dict['logging']['lvl'] = 'DEBUG'
@@ -43,6 +49,16 @@ def load_options():
 
     opt_dict['generation']['n_documents'] = 1000
     opt_dict['generation']['id_offset'] = 0
+
+    try:
+        with open(config_filename, 'r') as config_file:
+            yml_dict = yaml.safe_load(config_file)
+    except EnvironmentError: # parent of IOError, OSError *and* WindowsError where available
+        # if no config.yml exists, work with values from above
+        yml_dict = {}
+
+    # merge values from config.yml into options dict
+    opt_dict = {**yml_dict, **opt_dict}
 
     # build full url
     opt_dict['elastic']['es_url'] = f'{opt_dict.get("elastic").get("es_scheme")}://'\
@@ -147,6 +163,8 @@ def main():
 
     # init logger
     mylogger = init_logging(options.get('logging').get('lvl'))
+
+    mylogger.debug(options)
 
     es_client = es.Elasticsearch([options.get('elastic').get('es_url')],
                                   basic_auth=(f'{options.get("elastic").get("es_user")}',
