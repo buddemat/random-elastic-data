@@ -34,31 +34,35 @@ def load_options():
     opt_dict['elastic'] = {}
     opt_dict['generation'] = {}
 
-    # standard values ??
-    opt_dict['logging']['stdout'] = True
-    opt_dict['logging']['filename'] = 'load_all_types_random.log'
-    opt_dict['logging']['lvl'] = 'DEBUG'
+    # load ALL environment vars
+    env = dict(os.environ)
 
-    opt_dict['elastic']['es_scheme'] = 'http'
-    opt_dict['elastic']['es_host'] = 'localhost'
-    opt_dict['elastic']['es_port'] = 9200
-    opt_dict['elastic']['es_user'] = None
-    opt_dict['elastic']['es_pass'] = None
+    # load relevant env vars, default to standard values if env vars not set
+    opt_dict['logging']['stdout'] = env.get('ENV_LOGGING_STDOUT', True)
+    opt_dict['logging']['filename'] = env.get('ENV_LOGGING_LOGFILENAME', None)
+    opt_dict['logging']['lvl'] = env.get('ENV_LOGGING_LEVEL', 'DEBUG')
 
-    opt_dict['elastic']['index_name'] = 'all_types_random-2'
+    opt_dict['elastic']['es_scheme'] = env.get('ENV_ELASTIC_SCHEME', 'http')
+    opt_dict['elastic']['es_host'] = env.get('ENV_ELASTIC_HOST', 'localhost')
+    opt_dict['elastic']['es_port'] = env.get('ENV_ELASTIC_PORT', 9200)
+    opt_dict['elastic']['es_user'] = env.get('ENV_ELASTIC_USER', None)
+    opt_dict['elastic']['es_pass'] = env.get('ENV_ELASTIC_PASS', None)
+    opt_dict['elastic']['index_name'] = env.get('ENV_ELASTIC_TARGETINDEX', 'all_types_random-2')
 
-    opt_dict['generation']['n_documents'] = 1000
-    opt_dict['generation']['id_offset'] = 0
+    opt_dict['generation']['n_documents'] = env.get('ENV_GENERATE_NDOCS', 1000)
+    opt_dict['generation']['id_offset'] = env.get('ENV_GENERATE_IDOFFSET', 0)
 
     try:
-        with open(config_filename, 'r') as config_file:
+        with open(config_filename, 'r', encoding='utf-8') as config_file:
             yml_dict = yaml.safe_load(config_file)
+
+            # merge values from config.yml into options dict, needs to be done per sublevel
+            opt_dict['logging'] = opt_dict.get('logging') | yml_dict.get('logging', {})
+            opt_dict['elastic'] = opt_dict.get('elastic') | yml_dict.get('elastic', {})
+            opt_dict['generation'] = opt_dict.get('generation') | yml_dict.get('generation', {})
     except EnvironmentError: # parent of IOError, OSError *and* WindowsError where available
         # if no config.yml exists, work with values from above
-        yml_dict = {}
-
-    # merge values from config.yml into options dict
-    opt_dict = {**yml_dict, **opt_dict}
+        pass
 
     # build full url
     opt_dict['elastic']['es_url'] = f'{opt_dict.get("elastic").get("es_scheme")}://'\
@@ -97,13 +101,14 @@ def init_logging(lvl='DEBUG', log_to_stdout=True, logfile_name=None):
 def document_stream(idx_name, amount, offset=0):
     ''' generator function for stream of json documents / dicts with random persons '''
     mylogger = logging.getLogger(__name__)
-    for n in range(offset+1, offset+amount+1):
+
+    for num in range(offset+1, offset+amount+1):
         p = rp.RandomPerson()
-        if n%100 == 0:
-            mylogger.debug(f'{n} documents generated...')
+        if num%1000 == 0:
+            mylogger.debug(f'{num} documents generated...')
         yield {"_index": idx_name,
                "_source": { 'uuid': p.uuid,
-                            'num_id': n,
+                            'num_id': num,
                             'created_at': p.created_at,
                             'firstname': p.firstname,
                             'lastname': p.lastname,
@@ -162,9 +167,11 @@ def main():
     options = load_options()
 
     # init logger
-    mylogger = init_logging(options.get('logging').get('lvl'))
+    mylogger = init_logging(options.get('logging').get('lvl'),
+                            options.get('logging').get('stdout'),
+                            options.get('logging').get('filename'))
 
-    mylogger.debug(options)
+    mylogger.debug(f'Options loaded: {options}')
 
     es_client = es.Elasticsearch([options.get('elastic').get('es_url')],
                                   basic_auth=(f'{options.get("elastic").get("es_user")}',
