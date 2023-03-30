@@ -4,11 +4,11 @@ logging:
     lvl: INFO
 
 elastic:
-    scheme: http
-    host: localhost
-    port: 9200
-    user: elastic
-    pass: secret
+    es_scheme: http
+    es_host: localhost
+    es_port: 9200
+    es_user: elastic
+    es_pass: secret
     index_name: all_types_random-1
     
 generation:
