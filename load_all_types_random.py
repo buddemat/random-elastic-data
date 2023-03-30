@@ -19,24 +19,33 @@ def load_options():
     ''' load options from yaml file or environment vars '''
     # init empty dict
     opt_dict = {}
+    opt_dict['elastic'] = {}
+    opt_dict['generation'] = {}
 
-    opt_dict['es_scheme'] = 'http'
-    opt_dict['es_host'] = 'localhost'
-    opt_dict['es_port'] = 9200
-    opt_dict['es_user'] = None
-    opt_dict['es_pass'] = None
+    opt_dict['elastic']['es_scheme'] = 'http'
+    opt_dict['elastic']['es_host'] = 'localhost'
+    opt_dict['elastic']['es_port'] = 9200
+    opt_dict['elastic']['es_user'] = None
+    opt_dict['elastic']['es_pass'] = None
 
-    opt_dict['index_name'] = 'all_types_random-2'
+    opt_dict['elastic']['index_name'] = 'all_types_random-2'
+
+    opt_dict['generation']['n_documents'] = 1000
+    opt_dict['generation']['id_offset'] = 0
 
     # build full url
-    opt_dict['es_url'] = f'{opt_dict["es_scheme"]}://{opt_dict["es_host"]}:{opt_dict["es_port"]}'
+    opt_dict['elastic']['es_url'] = f'{opt_dict.get("elastic").get("es_scheme")}://'\
+                                    f'{opt_dict.get("elastic").get("es_host")}:'\
+                                    f'{opt_dict.get("elastic").get("es_port")}'
 
     return opt_dict
 
-def document_stream(idx_name, amount):
+def document_stream(idx_name, amount, offset=0):
     ''' generator function for stream of json documents / dicts with random persons '''
-    for n in range(1, amount+1):
+    for n in range(offset+1, offset+amount+1):
         p = rp.RandomPerson()
+        if n%10000 == 0:
+            print(f'{n} documents generated...')
         yield {"_index": idx_name,
                "_source": { 'uuid': p.uuid,
                             'num_id': n,
@@ -96,15 +105,18 @@ def main():
     ''' main function '''
     # load options
     options = load_options()
+    print(f"\n\n{options.get('elastic').get('es_url')}\n\n")
 
-    es_client = es.Elasticsearch([options.get('es_url')],
-                                  basic_auth=(f'{options.get("es_user")}',
-                                              f'{options.get("es_pass")}')
+    es_client = es.Elasticsearch([options.get('elastic').get('es_url')],
+                                  basic_auth=(f'{options.get("elastic").get("es_user")}',
+                                              f'{options.get("elastic").get("es_pass")}')
                                   )
 
-    init_es_index(es_client, options.get('index_name'), replace=True)
+    init_es_index(es_client, options.get('elastic').get('index_name'), replace=True)
 
-    stream = document_stream(options.get('index_name'), 10)
+    stream = document_stream(options.get('elastic').get('index_name'), 
+                             options.get('generation').get('n_documents'),
+                             options.get('generation').get('id_offset'))
 
     for status_ok, response in helpers.streaming_bulk(es_client, actions=stream):
         if not status_ok:
