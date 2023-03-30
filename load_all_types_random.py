@@ -3,7 +3,13 @@
 Module that generates random documents containing ficticious persons and random
 numerical data and uploads them to Elasticsearch using the _bulk API. The goal
 is to have demo and testing data covering most data types.
+
+Author: Matthias Budde
+Date: 2023
 '''
+
+import logging
+import sys
 import json
 from random import randint, getrandbits, uniform
 import base64
@@ -19,8 +25,13 @@ def load_options():
     ''' load options from yaml file or environment vars '''
     # init empty dict
     opt_dict = {}
+    opt_dict['logging'] = {}
     opt_dict['elastic'] = {}
     opt_dict['generation'] = {}
+
+    opt_dict['logging']['stdout'] = True
+    opt_dict['logging']['filename'] = 'load_all_types_random.log'
+    opt_dict['logging']['lvl'] = 'DEBUG'
 
     opt_dict['elastic']['es_scheme'] = 'http'
     opt_dict['elastic']['es_host'] = 'localhost'
@@ -40,12 +51,40 @@ def load_options():
 
     return opt_dict
 
+
+def init_logging(lvl='DEBUG', log_to_stdout=True, logfile_name=None):
+    ''' initialize logging '''
+    log_lvl = logging.getLevelName(lvl)
+
+    logger = logging.getLogger(__name__)
+
+    handlers = []
+    if log_to_stdout:
+        stdout_handler = logging.StreamHandler(sys.stdout)
+        handlers.append(stdout_handler)
+    if logfile_name:
+        log_file_handler = logging.FileHandler(filename = logfile_name,
+                                               encoding = 'utf-8',
+                                               mode = 'w')
+        handlers.append(log_file_handler)
+
+    logging.basicConfig(
+             format = '%(asctime)s %(levelname)-8s %(message)s',
+             level = logging.ERROR, # root logger
+             datefmt = '%Y-%m-%d %H:%M:%S',
+             handlers = handlers)
+
+    logger.setLevel(log_lvl) # mylogger
+    return logger
+
+
 def document_stream(idx_name, amount, offset=0):
     ''' generator function for stream of json documents / dicts with random persons '''
+    mylogger = logging.getLogger(__name__)
     for n in range(offset+1, offset+amount+1):
         p = rp.RandomPerson()
-        if n%10000 == 0:
-            print(f'{n} documents generated...')
+        if n%100 == 0:
+            mylogger.debug(f'{n} documents generated...')
         yield {"_index": idx_name,
                "_source": { 'uuid': p.uuid,
                             'num_id': n,
@@ -105,7 +144,9 @@ def main():
     ''' main function '''
     # load options
     options = load_options()
-    print(f"\n\n{options.get('elastic').get('es_url')}\n\n")
+
+    # init logger
+    mylogger = init_logging(options.get('logging').get('lvl'))
 
     es_client = es.Elasticsearch([options.get('elastic').get('es_url')],
                                   basic_auth=(f'{options.get("elastic").get("es_user")}',
@@ -114,14 +155,14 @@ def main():
 
     init_es_index(es_client, options.get('elastic').get('index_name'), replace=True)
 
-    stream = document_stream(options.get('elastic').get('index_name'), 
+    stream = document_stream(options.get('elastic').get('index_name'),
                              options.get('generation').get('n_documents'),
                              options.get('generation').get('id_offset'))
 
     for status_ok, response in helpers.streaming_bulk(es_client, actions=stream):
         if not status_ok:
             # if failure inserting
-            print(response)
+            mylogger.debug(response)
 
 if __name__ == '__main__':
     main()
