@@ -12,6 +12,7 @@ import logging
 import sys
 import os
 import json
+import re
 from random import randint, getrandbits, uniform
 import base64
 import yaml
@@ -48,6 +49,7 @@ def load_options():
     opt_dict['elastic']['es_user'] = env.get('ENV_ELASTIC_USER', None)
     opt_dict['elastic']['es_pass'] = env.get('ENV_ELASTIC_PASS', None)
     opt_dict['elastic']['index_name'] = env.get('ENV_ELASTIC_TARGETINDEX', 'all_types_random-2')
+    # TODO: Add option for index replacement
 
     opt_dict['generation']['n_documents'] = env.get('ENV_GENERATE_NDOCS', 1000)
     opt_dict['generation']['id_offset'] = env.get('ENV_GENERATE_IDOFFSET', 0)
@@ -103,35 +105,35 @@ def document_stream(idx_name, amount, offset=0):
     mylogger = logging.getLogger(__name__)
 
     for num in range(offset+1, offset+amount+1):
-        p = rp.RandomPerson()
+        person = rp.RandomPerson()
         if num%1000 == 0:
             mylogger.debug(f'{num} documents generated...')
         yield {"_index": idx_name,
-               "_source": { 'uuid': p.uuid,
+               "_source": { 'uuid': person.uuid,
                             'num_id': num,
-                            'created_at': p.created_at,
-                            'firstname': p.firstname,
-                            'lastname': p.lastname,
-                            'nested_name': { 'first': p.firstname, 'last': p.lastname },
-                            'birthplace': p.birthplace,
-                            'nickname': p.nickname,
-                            'age': p.age,
-                            'gender': p.gender,
-                            'date_of_birth': p.date_of_birth,
-                            'email_address': p.email_address,
-                            'ip_address': p.ip_address,
-                            'lefthanded': p.lefthanded,
-                            'person_xml': p.to_xml(),
-                            'person_json': p.to_json(),
+                            'created_at': person.created_at,
+                            'firstname': person.firstname,
+                            'lastname': person.lastname,
+                            'nested_name': { 'first': person.firstname, 'last': person.lastname },
+                            'birthplace': person.birthplace,
+                            'nickname': person.nickname,
+                            'age': person.age,
+                            'gender': person.gender,
+                            'date_of_birth': person.date_of_birth,
+                            'email_address': person.email_address,
+                            'ip_address': person.ip_address,
+                            'lefthanded': person.lefthanded,
+                            'person_xml': person.to_xml(),
+                            'person_json': person.to_json(),
                             'some_const_keyword': 'random',
-                            'some_text_without_multi_field': p.favorite_food,
-                            'some_text_with_array_multifield_content': [p.favorite_food,
-                                                                        p.favorite_color,
-                                                                        p.occupation],
+                            'some_text_without_multi_field': person.favorite_food,
+                            'some_text_with_array_multifield_content': [person.favorite_food,
+                                                                        person.favorite_color,
+                                                                        person.occupation],
                             'some_text_with_ignored_keyword': faker.paragraph(nb_sentences = 20),
                             'some_epoch_date': randint(1000000000000,9999999999999),
                             'some_bool': bool(getrandbits(1)),
-                            'some_binary': str(base64.b64encode(p.city.encode('utf-8')))[2:-1],
+                            'some_binary': str(base64.b64encode(person.city.encode('utf-8')))[2:-1],
                             'some_long': randint(-2^63,2^63-1),
                             'some_int': randint(-2^63,2^63-1),
                             'some_short': randint(-32768, 32767),
@@ -146,13 +148,18 @@ def document_stream(idx_name, amount, offset=0):
 
 def init_es_index(es_client, idx_name, replace=False):
     ''' create the initial index '''
+    mylogger = logging.getLogger(__name__)
+
     if replace:
         # delete (possibly) existing index
+        mylogger.info('Deleting (possibly) existing index...')
         es_client.options(ignore_status=[400,404]).indices.delete(index=idx_name)
 
+    mylogger.info('Loading mapping...')
     with open('mapping.json', 'r', encoding='utf-8') as mapping_file:
         mapping = json.load(mapping_file)
 
+        mylogger.info('Creating index...')
         # create index with mapping
         response = es_client.options(ignore_status=[400]).indices.create(
             index = idx_name,
@@ -171,8 +178,11 @@ def main():
                             options.get('logging').get('stdout'),
                             options.get('logging').get('filename'))
 
-    mylogger.debug(f'Options loaded: {options}')
 
+    options_str = re.sub("('es_pass': )('|\")(.*?)('|\")(, )", r"\1*****\5", str(options))
+    mylogger.debug(f'Options loaded: {options_str}')
+
+    mylogger.info(f'Connecting to ES cluster {options.get("elastic").get("es_url")}...')
     es_client = es.Elasticsearch([options.get('elastic').get('es_url')],
                                   basic_auth=(f'{options.get("elastic").get("es_user")}',
                                               f'{options.get("elastic").get("es_pass")}')
@@ -180,6 +190,7 @@ def main():
 
     init_es_index(es_client, options.get('elastic').get('index_name'), replace=True)
 
+    mylogger.info('Generating and indexing documents...')
     stream = document_stream(options.get('elastic').get('index_name'),
                              options.get('generation').get('n_documents'),
                              options.get('generation').get('id_offset'))
