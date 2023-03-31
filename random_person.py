@@ -1,6 +1,10 @@
 '''
 Module that generates random (German) persons, built on PyZufall.
+
+Author: Matthias Budde
+Date: 2023
 '''
+
 import json
 from random import randint
 import uuid
@@ -27,8 +31,8 @@ class RandomPerson:
         self.nested_name = { 'first': p.vorname, 'last': p.nachname }
         self.nickname = p.nickname
         # TODO: make age attribute into property?
-        self.age = p.alter
         self.date_of_birth = p.geburtsdatum
+        self.age = p.alter
         # ~2% should be diverse
         self.gender = 'diverse' if randint(0,100) < 2 else ('male' if p.geschlecht else 'female')
         if p.geburtsname != p.nachname:
