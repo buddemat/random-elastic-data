@@ -43,6 +43,7 @@ To use a `config.yml`, copy `config.yml.template` to `config.yml` and fill in yo
 | `generation.n_documents`      | `ENV_GENERATE_NDOCS`        | Number of documents to generate                          | `1000`                   |
 | `generation.id_offset`        | `ENV_GENERATE_IDOFFSET`     | Numeric ID offset (for appending to an existing index)   | `0`                      |
 | `generation.cities_csv`       | `ENV_GENERATE_CITIESCSV`    | Path to the Destatis municipalities CSV                  | `staedte_komplett.csv`   |
+| `generation.seed`             | `ENV_GENERATE_SEED`         | Integer seed for reproducible generation (unset = random) | `None`                  |
 
 
 ## Data sources

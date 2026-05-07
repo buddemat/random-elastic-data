@@ -15,5 +15,6 @@ generation:
     n_documents: 1000
     id_offset: 0
     # cities_csv: /path/to/staedte_komplett.csv  # default: staedte_komplett.csv next to the script
+    # seed: 42                                   # fix for reproducible output; unset = random
 
 

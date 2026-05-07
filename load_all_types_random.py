@@ -13,6 +13,7 @@ import sys
 import os
 import json
 import re
+import random
 from random import randint, getrandbits, uniform
 import base64
 import yaml
@@ -51,6 +52,7 @@ def load_options():
     opt_dict['generation']['n_documents'] = env.get('ENV_GENERATE_NDOCS', 1000)
     opt_dict['generation']['id_offset'] = env.get('ENV_GENERATE_IDOFFSET', 0)
     opt_dict['generation']['cities_csv'] = env.get('ENV_GENERATE_CITIESCSV', None)
+    opt_dict['generation']['seed'] = env.get('ENV_GENERATE_SEED', None)
 
     try:
         with open(config_filename, 'r', encoding='utf-8') as config_file:
@@ -178,6 +180,12 @@ def main():
     mylogger = init_logging(options.get('logging').get('lvl'),
                             options.get('logging').get('stdout'),
                             options.get('logging').get('filename'))
+
+    seed = options.get('generation').get('seed')
+    if seed is not None:
+        random.seed(int(seed))
+        Faker.seed(int(seed))
+        mylogger.debug(f'Random seed set to {seed}')
 
     options_str = re.sub("('es_pass': )('|\")(.*?)('|\")(, )", r"\1*****\5", str(options))
     mylogger.debug(f'Options loaded: {options_str}')
