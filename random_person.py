@@ -1,67 +1,146 @@
 '''
-Module that generates random (German) persons, built on PyZufall.
+Module that generates random (German) persons using Faker and the Destatis city dataset.
 
 Author: Matthias Budde
 Date: 2023
 '''
 
 import json
-from random import randint, choices
-import uuid
+import math
+import random
+import uuid as uuid_module
 from datetime import datetime
-from pyzufall.person import Person
+from random import randint, choices, uniform
 from dicttoxml import dicttoxml
 from faker import Faker
 from faker_food import FoodProvider
+import city_provider as cp
 
 fake = Faker(['en', 'de'])
 fake['en'].add_provider(FoodProvider)
-fake['de'].add_provider(FoodProvider) # will still be english
 
-loca = 'en'
+DOMAINS = [
+    'web.de', 'gmx.de', 'gmx.net', 't-online.de', 'freenet.de',
+    'posteo.de', 'mail.de', 'online.de',
+    'gmail.com', 'yahoo.com', 'yahoo.de', 'hotmail.com', 'hotmail.de',
+    'outlook.com', 'outlook.de', 'icloud.com', 'me.com',
+    'protonmail.com', 'protonmail.ch', 'mailbox.org',
+]
+
+INTERESTS = [
+    'Fotografie', 'Kochen', 'Reisen', 'Lesen', 'Radfahren', 'Wandern',
+    'Gartenarbeit', 'Yoga', 'Schwimmen', 'Musik', 'Malen', 'Zeichnen',
+    'Spielen', 'Klettern', 'Laufen', 'Tanzen', 'Backen', 'Nähen',
+    'Kino', 'Theater', 'Camping', 'Angeln', 'Ski fahren', 'Surfen',
+    'Motorrad fahren',
+]
+
+MARITAL_STATUSES = ['single', 'married', 'divorced', 'widowed']
+MARITAL_WEIGHTS  = [38, 45, 13, 4]
+
+NUM_CHILDREN_VALUES  = [0, 1, 2, 3, 4, 5]
+NUM_CHILDREN_WEIGHTS = [40, 25, 22, 9, 3, 1]
+
+
+def _to_email_slug(s):
+    return (s.lower()
+             .replace('ä', 'ae').replace('ö', 'oe').replace('ü', 'ue')
+             .replace('ß', 'ss').replace(' ', '').replace('-', ''))
+
+
+def _make_email(firstname, lastname, nickname, domain):
+    first_slug = _to_email_slug(firstname)
+    last_slug  = _to_email_slug(lastname)
+    rnd4 = randint(1000, 9999)
+    pattern = choices(['fl', 'il', 'nick'], weights=[55, 35, 10])[0]
+    if pattern == 'fl':
+        local = f'{first_slug}.{last_slug}{rnd4}'
+    elif pattern == 'il':
+        local = f'{first_slug[0]}{last_slug}{rnd4}'
+    else:
+        local = nickname
+    return f'{local}@{domain}'
+
 
 class RandomPerson:
-    """Class for random person"""
+    '''Represents a randomly generated person with realistic German attributes.'''
     _instance_count = 0
 
-    def __init__(self, uuid=str(uuid.uuid1()), num_id=None):
+    def __init__(self, city_provider=None):
         RandomPerson._instance_count += 1
-        self.created_at = datetime.today().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-        self.uuid = uuid
-        self.num_id = num_id if num_id else RandomPerson._instance_count
 
-        p = Person()
-        #self.firstname = p.vorname
-        self.firstname = fake[loca].first_name()
-        #self.lastname = p.nachname
-        self.lastname = p.nachname
-        self.nested_name = { 'first': self.firstname, 'last': self.lastname }
-        self.nickname = p.nickname
-        # TODO: make age attribute into property?
-        self.date_of_birth = p.geburtsdatum
-        self.age = p.alter
-        # ~2% should be diverse
-        self.gender = 'diverse' if randint(0,100) < 2 else ('male' if p.geschlecht else 'female')
-        if p.geburtsname != p.nachname:
-            self.birthname = p.geburtsname
-        self.birthplace = p.geburtsort
-        self.city = p.wohnort
-        self.occupation = p.beruf
-        self.interests = p.interessen
-        self.favorite_color = p.lieblingsfarbe
-        #self.favorite_food = p.lieblingsessen
-        self.favorite_food = fake[loca].dish()
-        self.motto = p.motto
-        self.email_address = p.email
+        provider = city_provider if city_provider is not None else cp.get_default_provider()
+
+        self.uuid = str(uuid_module.uuid1())
+        self.created_at = datetime.today().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+        self.num_id = RandomPerson._instance_count
+
+        self.firstname = fake['en'].first_name()
+        self.lastname  = fake['de'].last_name()
+        self.nested_name = {'first': self.firstname, 'last': self.lastname}
+
+        self.nickname = fake.word() + '_' + fake.word()
+        if randint(0, 4) == 0:
+            self.nickname += str(randint(10, 99))
+
+        dob = fake.date_of_birth(minimum_age=0, maximum_age=110)
+        self.date_of_birth = dob.strftime('%d.%m.%Y')
+
+        self.gender = 'diverse' if random.random() < 0.02 else ('male' if random.random() < 0.5 else 'female')
+
+        birthname_candidate = fake['de'].last_name()
+        if birthname_candidate != self.lastname and random.random() < 0.30:
+            self.birthname = birthname_candidate
+
+        birthplace_city = provider.random_city()
+        self.birthplace = birthplace_city['name']
+
+        wohnort = provider.random_city()
+        self.city = wohnort['name']
+        self.postal_code = wohnort['postal_code']
+        self.state = wohnort['state']
+
+        r_km = math.sqrt(wohnort['area_km2'] / math.pi) / 2
+        sigma_lat = min(0.075, r_km / 111)
+        sigma_lon = min(0.10,  r_km / (111 * math.cos(math.radians(wohnort['lat']))))
+        home_lat = wohnort['lat'] + max(-0.15, min(0.15, random.gauss(0, sigma_lat)))
+        home_lon = wohnort['lon'] + max(-0.20, min(0.20, random.gauss(0, sigma_lon)))
+        self.city_location = {'lat': round(home_lat, 6), 'lon': round(home_lon, 6)}
+
+        side_km = uniform(0.2, 1.5)
+        d_lat = side_km / 111
+        d_lon = side_km / (111 * math.cos(math.radians(home_lat)))
+        self.neighborhood = {
+            'type': 'envelope',
+            'coordinates': [
+                [round(home_lon - d_lon, 6), round(home_lat + d_lat, 6)],
+                [round(home_lon + d_lon, 6), round(home_lat - d_lat, 6)],
+            ],
+        }
+
+        self.occupation = fake.job()
+        self.interests = random.sample(INTERESTS, randint(2, 5))
+        self.favorite_color = fake.color_name()
+        self.favorite_food = fake['en'].dish()
+        self.motto = fake.sentence()
+
+        domain = random.choice(DOMAINS)
+        last_slug = _to_email_slug(self.lastname)
+        self.email_address = _make_email(self.firstname, self.lastname, self.nickname, domain)
+        self.homepage = (f'https://www.{last_slug}.de' if random.random() < 0.6
+                         else fake.url())
+
         self.ip_address = fake.ipv4()
-        self.homepage = p.homepage
-        # ~10% should be lefthanded
-        self.lefthanded = bool(randint(0,100) < 10)
+        self.lefthanded = random.random() < 0.10
         self.address_st = fake['de'].street_name()
         _no = fake.numerify(choices(['%', '%#', '%##'], weights=[15, 65, 20])[0])
         self.address_no = _no + (choices(['a', 'b', 'c', 'd'], weights=[4, 3, 2, 1])[0]
                                   if randint(1, 100) <= 8 else '')
- 
+
+        self.phone_number = fake['de'].phone_number()
+        self.marital_status = choices(MARITAL_STATUSES, weights=MARITAL_WEIGHTS)[0]
+        self.num_children = choices(NUM_CHILDREN_VALUES, weights=NUM_CHILDREN_WEIGHTS)[0]
+
     def to_dict(self):
         return vars(self)
 
