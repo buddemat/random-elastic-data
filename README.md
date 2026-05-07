@@ -7,15 +7,54 @@ Python script that generates random data and stores it in Elasticsearch
 ```
 .
 ├── .gitignore                     # gitignore
+├── config.yml.template            # example config.yml options file
 ├── load_all_types_random.py       # main script to generate random documents
 ├── mapping.json                   # mapping for elasticsearch index
 ├── random_person.py               # module to generate random (German) persons
 └── README.md                      # this file
+
+# Created with `conda list -e > requirements.txt`
+# Created with `pip list --format=freeze > requirements.txt`
 ```
 
 
-## Requirements
+## Usage
 
-There are multiple `requirements.txt` 
+### Requirements
+
+There are multiple `requirements.txt` files.
+
+### Configuration
+
+Configuration is layered: hardcoded defaults are overridden by environment variables, which are then overridden by values in `config.yml`.
+
+To use a `config.yml`, copy `config.yml.template` to `config.yml` and fill in your values.
+
+| `config.yml` key              | Environment variable        | Description                                              | Default                  |
+|-------------------------------|-----------------------------|----------------------------------------------------------|--------------------------|
+| `logging.stdout`              | `ENV_LOGGING_STDOUT`        | Print log messages to stdout                             | `True`                   |
+| `logging.filename`            | `ENV_LOGGING_LOGFILENAME`   | Log file path (disabled if unset)                        | `None`                   |
+| `logging.lvl`                 | `ENV_LOGGING_LEVEL`         | Log level (`DEBUG`, `INFO`, …)                           | `DEBUG`                  |
+| `elastic.es_scheme`           | `ENV_ELASTIC_SCHEME`        | ES URL scheme                                            | `http`                   |
+| `elastic.es_host`             | `ENV_ELASTIC_HOST`          | ES hostname                                              | `localhost`               |
+| `elastic.es_port`             | `ENV_ELASTIC_PORT`          | ES port                                                  | `9200`                   |
+| `elastic.es_user`             | `ENV_ELASTIC_USER`          | ES username (no auth if unset)                           | `None`                   |
+| `elastic.es_pass`             | `ENV_ELASTIC_PASS`          | ES password (no auth if unset)                           | `None`                   |
+| `elastic.index_name`          | `ENV_ELASTIC_TARGETINDEX`   | Target index name                                        | `all_types_random-2`     |
+| `generation.n_documents`      | `ENV_GENERATE_NDOCS`        | Number of documents to generate                          | `1000`                   |
+| `generation.id_offset`        | `ENV_GENERATE_IDOFFSET`     | Numeric ID offset (for appending to an existing index)   | `0`                      |
+| `generation.pyzufall_path`    | `ENV_GENERATE_PYZUFALLPATH` | Path to a local PyZufall checkout (uses installed package if unset) | `None`      |
 
 
+## Data sources
+
+`staedte_komplett.csv` is derived from the German municipality directory published by
+Statistisches Bundesamt (Destatis). Run `get_data.py` to re-download and regenerate it.
+
+| | |
+|---|---|
+| **Publisher** | Statistisches Bundesamt (Destatis) |
+| **Dataset** | Gemeindeverzeichnis-Informationssystem (GV-ISys) |
+| **URL** | https://www.destatis.de/DE/Themen/Laender-Regionen/Regionales/Gemeindeverzeichnis/ |
+| **License** | Datenlizenz Deutschland – Namensnennung – Version 2.0 |
+| **License URL** | https://www.govdata.de/dl-de/by-2-0 |

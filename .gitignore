@@ -2,3 +2,9 @@ __pycache__
 
 *.swp
 *.swo
+*.bak
+*.log
+
+config.yml
+config.ymlll
+debug.json

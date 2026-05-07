@@ -14,5 +14,6 @@ elastic:
 generation:
     n_documents: 1000
     id_offset: 0
+    # pyzufall_path: /path/to/PyZufall  # uncomment to use a local PyZufall checkout
 
 
