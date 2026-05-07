@@ -14,6 +14,6 @@ elastic:
 generation:
     n_documents: 1000
     id_offset: 0
-    # pyzufall_path: /path/to/PyZufall  # uncomment to use a local PyZufall checkout
+    # cities_csv: /path/to/staedte_komplett.csv  # default: staedte_komplett.csv next to the script
 
 

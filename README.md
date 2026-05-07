@@ -7,14 +7,13 @@ Python script that generates random data and stores it in Elasticsearch
 ```
 .
 ├── .gitignore                     # gitignore
+├── city_provider.py               # population-weighted city selection from Destatis data
 ├── config.yml.template            # example config.yml options file
 ├── load_all_types_random.py       # main script to generate random documents
 ├── mapping.json                   # mapping for elasticsearch index
 ├── random_person.py               # module to generate random (German) persons
+├── staedte_komplett.csv           # Destatis municipality data (see Data sources)
 └── README.md                      # this file
-
-# Created with `conda list -e > requirements.txt`
-# Created with `pip list --format=freeze > requirements.txt`
 ```
 
 
@@ -43,7 +42,7 @@ To use a `config.yml`, copy `config.yml.template` to `config.yml` and fill in yo
 | `elastic.index_name`          | `ENV_ELASTIC_TARGETINDEX`   | Target index name                                        | `all_types_random-2`     |
 | `generation.n_documents`      | `ENV_GENERATE_NDOCS`        | Number of documents to generate                          | `1000`                   |
 | `generation.id_offset`        | `ENV_GENERATE_IDOFFSET`     | Numeric ID offset (for appending to an existing index)   | `0`                      |
-| `generation.pyzufall_path`    | `ENV_GENERATE_PYZUFALLPATH` | Path to a local PyZufall checkout (uses installed package if unset) | `None`      |
+| `generation.cities_csv`       | `ENV_GENERATE_CITIESCSV`    | Path to the Destatis municipalities CSV                  | `staedte_komplett.csv`   |
 
 
 ## Data sources

@@ -19,6 +19,8 @@ import yaml
 import elasticsearch as es
 from elasticsearch import helpers
 from faker import Faker
+import random_person as rp
+import city_provider as cp
 
 faker = Faker()
 
@@ -28,16 +30,13 @@ def load_options():
 
     config_filename = './config.yml'
 
-    # init empty dict
     opt_dict = {}
     opt_dict['logging'] = {}
     opt_dict['elastic'] = {}
     opt_dict['generation'] = {}
 
-    # load ALL environment vars
     env = dict(os.environ)
 
-    # load relevant env vars, default to standard values if env vars not set
     opt_dict['logging']['stdout'] = env.get('ENV_LOGGING_STDOUT', True)
     opt_dict['logging']['filename'] = env.get('ENV_LOGGING_LOGFILENAME', None)
     opt_dict['logging']['lvl'] = env.get('ENV_LOGGING_LEVEL', 'DEBUG')
@@ -48,25 +47,21 @@ def load_options():
     opt_dict['elastic']['es_user'] = env.get('ENV_ELASTIC_USER', None)
     opt_dict['elastic']['es_pass'] = env.get('ENV_ELASTIC_PASS', None)
     opt_dict['elastic']['index_name'] = env.get('ENV_ELASTIC_TARGETINDEX', 'all_types_random-2')
-    # TODO: Add option for index replacement
 
     opt_dict['generation']['n_documents'] = env.get('ENV_GENERATE_NDOCS', 1000)
     opt_dict['generation']['id_offset'] = env.get('ENV_GENERATE_IDOFFSET', 0)
-    opt_dict['generation']['pyzufall_path'] = env.get('ENV_GENERATE_PYZUFALLPATH', None)
+    opt_dict['generation']['cities_csv'] = env.get('ENV_GENERATE_CITIESCSV', None)
 
     try:
         with open(config_filename, 'r', encoding='utf-8') as config_file:
             yml_dict = yaml.safe_load(config_file)
 
-            # merge values from config.yml into options dict, needs to be done per sublevel
             opt_dict['logging'] = opt_dict.get('logging') | yml_dict.get('logging', {})
             opt_dict['elastic'] = opt_dict.get('elastic') | yml_dict.get('elastic', {})
             opt_dict['generation'] = opt_dict.get('generation') | yml_dict.get('generation', {})
-    except EnvironmentError: # parent of IOError, OSError *and* WindowsError where available
-        # if no config.yml exists, work with values from above
+    except EnvironmentError:
         pass
 
-    # build full url
     opt_dict['elastic']['es_url'] = f'{opt_dict.get("elastic").get("es_scheme")}://'\
                                     f'{opt_dict.get("elastic").get("es_host")}:'\
                                     f'{opt_dict.get("elastic").get("es_port")}'
@@ -92,21 +87,22 @@ def init_logging(lvl='DEBUG', log_to_stdout=True, logfile_name=None):
 
     logging.basicConfig(
              format = '%(asctime)s %(levelname)-8s %(message)s',
-             level = logging.ERROR, # root logger
+             level = logging.ERROR,
              datefmt = '%Y-%m-%d %H:%M:%S',
              handlers = handlers)
 
-    logger.setLevel(log_lvl) # mylogger
+    logger.setLevel(log_lvl)
     return logger
 
 
-def document_stream(idx_name, amount, offset=0):
+def document_stream(idx_name, amount, cities_csv=None, offset=0):
     ''' generator function for stream of json documents / dicts with random persons '''
-    import random_person as rp
     mylogger = logging.getLogger(__name__)
 
+    provider = cp.CityProvider(cities_csv) if cities_csv else cp.get_default_provider()
+
     for num in range(offset+1, offset+amount+1):
-        person = rp.RandomPerson()
+        person = rp.RandomPerson(city_provider=provider)
         if num%1000 == 0:
             mylogger.debug(f'{num} documents generated...')
         yield {"_index": idx_name,
@@ -118,7 +114,6 @@ def document_stream(idx_name, amount, offset=0):
                             'nested_name': { 'first': person.firstname, 'last': person.lastname },
                             'birthplace': person.birthplace,
                             'nickname': person.nickname,
-                            'age': person.age,
                             'gender': person.gender,
                             'date_of_birth': person.date_of_birth,
                             'email_address': person.email_address,
@@ -126,6 +121,13 @@ def document_stream(idx_name, amount, offset=0):
                             'lefthanded': person.lefthanded,
                             'address_st': person.address_st,
                             'address_no': person.address_no,
+                            'city_location': person.city_location,
+                            'neighborhood': person.neighborhood,
+                            'postal_code': person.postal_code,
+                            'state': person.state,
+                            'phone_number': person.phone_number,
+                            'marital_status': person.marital_status,
+                            'num_children': person.num_children,
                             'person_xml': person.to_xml(),
                             'person_json': person.to_json(),
                             'some_const_keyword': 'random',
@@ -154,7 +156,6 @@ def init_es_index(es_client, idx_name, replace=False):
     mylogger = logging.getLogger(__name__)
 
     if replace:
-        # delete (possibly) existing index
         mylogger.info('Deleting (possibly) existing index...')
         es_client.options(ignore_status=[400,404]).indices.delete(index=idx_name)
 
@@ -163,7 +164,6 @@ def init_es_index(es_client, idx_name, replace=False):
         mapping = json.load(mapping_file)
 
         mylogger.info('Creating index...')
-        # create index with mapping
         response = es_client.options(ignore_status=[400]).indices.create(
             index = idx_name,
             mappings = mapping
@@ -173,18 +173,11 @@ def init_es_index(es_client, idx_name, replace=False):
 
 def main():
     ''' main function '''
-    # load options
     options = load_options()
 
-    # init logger
     mylogger = init_logging(options.get('logging').get('lvl'),
                             options.get('logging').get('stdout'),
                             options.get('logging').get('filename'))
-
-
-    pyzufall_path = options.get('generation').get('pyzufall_path')
-    if pyzufall_path:
-        sys.path.insert(0, pyzufall_path)
 
     options_str = re.sub("('es_pass': )('|\")(.*?)('|\")(, )", r"\1*****\5", str(options))
     mylogger.debug(f'Options loaded: {options_str}')
@@ -200,11 +193,11 @@ def main():
     mylogger.info('Generating and indexing documents...')
     stream = document_stream(options.get('elastic').get('index_name'),
                              options.get('generation').get('n_documents'),
+                             options.get('generation').get('cities_csv'),
                              options.get('generation').get('id_offset'))
 
     for status_ok, response in helpers.streaming_bulk(es_client, actions=stream):
         if not status_ok:
-            # if failure inserting
             mylogger.debug(response)
 
 if __name__ == '__main__':
