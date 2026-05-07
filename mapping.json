@@ -90,9 +90,6 @@
                 }
             }
         },
-        "age": {
-            "type": "byte"
-        },
         "gender": {
             "type": "keyword"
         },
@@ -120,6 +117,27 @@
         },
         "address_no": {
             "type": "keyword"
+        },
+        "city_location": {
+            "type": "geo_point"
+        },
+        "neighborhood": {
+            "type": "geo_shape"
+        },
+        "postal_code": {
+            "type": "keyword"
+        },
+        "state": {
+            "type": "keyword"
+        },
+        "phone_number": {
+            "type": "keyword"
+        },
+        "marital_status": {
+            "type": "keyword"
+        },
+        "num_children": {
+            "type": "byte"
         },
         "some_const_keyword": {
             "type": "constant_keyword",
