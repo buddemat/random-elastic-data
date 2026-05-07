@@ -11,7 +11,7 @@ import random
 import uuid as uuid_module
 from datetime import datetime
 from random import randint, choices, uniform
-from dicttoxml import dicttoxml
+import xml.etree.ElementTree as ET
 from faker import Faker
 from faker_food import FoodProvider
 import city_provider as cp
@@ -40,6 +40,23 @@ MARITAL_WEIGHTS  = [38, 45, 13, 4]
 
 NUM_CHILDREN_VALUES  = [0, 1, 2, 3, 4, 5]
 NUM_CHILDREN_WEIGHTS = [40, 25, 22, 9, 3, 1]
+
+
+def _fill_element(el, value):
+    if isinstance(value, dict):
+        for k, v in value.items():
+            _fill_element(ET.SubElement(el, k), v)
+    elif isinstance(value, list):
+        for item in value:
+            _fill_element(ET.SubElement(el, 'item'), item)
+    elif value is not None:
+        el.text = str(value)
+
+
+def _dict_to_xml(data, root_tag='person'):
+    root = ET.Element(root_tag)
+    _fill_element(root, data)
+    return ET.tostring(root, encoding='unicode')
 
 
 def _to_email_slug(s):
@@ -148,4 +165,4 @@ class RandomPerson:
         return json.dumps(self.to_dict(), indent=4, ensure_ascii=False)
 
     def to_xml(self):
-        return dicttoxml(self.to_dict()).decode('utf-8')
+        return _dict_to_xml(self.to_dict())
