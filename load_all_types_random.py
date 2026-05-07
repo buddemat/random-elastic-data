@@ -19,7 +19,6 @@ import yaml
 import elasticsearch as es
 from elasticsearch import helpers
 from faker import Faker
-import random_person as rp
 
 faker = Faker()
 
@@ -53,6 +52,7 @@ def load_options():
 
     opt_dict['generation']['n_documents'] = env.get('ENV_GENERATE_NDOCS', 1000)
     opt_dict['generation']['id_offset'] = env.get('ENV_GENERATE_IDOFFSET', 0)
+    opt_dict['generation']['pyzufall_path'] = env.get('ENV_GENERATE_PYZUFALLPATH', None)
 
     try:
         with open(config_filename, 'r', encoding='utf-8') as config_file:
@@ -102,6 +102,7 @@ def init_logging(lvl='DEBUG', log_to_stdout=True, logfile_name=None):
 
 def document_stream(idx_name, amount, offset=0):
     ''' generator function for stream of json documents / dicts with random persons '''
+    import random_person as rp
     mylogger = logging.getLogger(__name__)
 
     for num in range(offset+1, offset+amount+1):
@@ -123,6 +124,8 @@ def document_stream(idx_name, amount, offset=0):
                             'email_address': person.email_address,
                             'ip_address': person.ip_address,
                             'lefthanded': person.lefthanded,
+                            'address_st': person.address_st,
+                            'address_no': person.address_no,
                             'person_xml': person.to_xml(),
                             'person_json': person.to_json(),
                             'some_const_keyword': 'random',
@@ -178,6 +181,10 @@ def main():
                             options.get('logging').get('stdout'),
                             options.get('logging').get('filename'))
 
+
+    pyzufall_path = options.get('generation').get('pyzufall_path')
+    if pyzufall_path:
+        sys.path.insert(0, pyzufall_path)
 
     options_str = re.sub("('es_pass': )('|\")(.*?)('|\")(, )", r"\1*****\5", str(options))
     mylogger.debug(f'Options loaded: {options_str}')

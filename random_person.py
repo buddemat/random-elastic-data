@@ -6,14 +6,19 @@ Date: 2023
 '''
 
 import json
-from random import randint
+from random import randint, choices
 import uuid
 from datetime import datetime
 from pyzufall.person import Person
 from dicttoxml import dicttoxml
 from faker import Faker
+from faker_food import FoodProvider
 
-faker = Faker()
+fake = Faker(['en', 'de'])
+fake['en'].add_provider(FoodProvider)
+fake['de'].add_provider(FoodProvider) # will still be english
+
+loca = 'en'
 
 class RandomPerson:
     """Class for random person"""
@@ -26,9 +31,11 @@ class RandomPerson:
         self.num_id = num_id if num_id else RandomPerson._instance_count
 
         p = Person()
-        self.firstname = p.vorname
+        #self.firstname = p.vorname
+        self.firstname = fake[loca].first_name()
+        #self.lastname = p.nachname
         self.lastname = p.nachname
-        self.nested_name = { 'first': p.vorname, 'last': p.nachname }
+        self.nested_name = { 'first': self.firstname, 'last': self.lastname }
         self.nickname = p.nickname
         # TODO: make age attribute into property?
         self.date_of_birth = p.geburtsdatum
@@ -42,13 +49,18 @@ class RandomPerson:
         self.occupation = p.beruf
         self.interests = p.interessen
         self.favorite_color = p.lieblingsfarbe
-        self.favorite_food = p.lieblingsessen
+        #self.favorite_food = p.lieblingsessen
+        self.favorite_food = fake[loca].dish()
         self.motto = p.motto
         self.email_address = p.email
-        self.ip_address = faker.ipv4()
+        self.ip_address = fake.ipv4()
         self.homepage = p.homepage
         # ~10% should be lefthanded
         self.lefthanded = bool(randint(0,100) < 10)
+        self.address_st = fake['de'].street_name()
+        _no = fake.numerify(choices(['%', '%#', '%##'], weights=[15, 65, 20])[0])
+        self.address_no = _no + (choices(['a', 'b', 'c', 'd'], weights=[4, 3, 2, 1])[0]
+                                  if randint(1, 100) <= 8 else '')
  
     def to_dict(self):
         return vars(self)

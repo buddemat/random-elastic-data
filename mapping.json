@@ -109,6 +109,18 @@
         "lefthanded": {
             "type": "boolean"
         },
+        "address_st": {
+            "type": "text",
+            "fields": {
+                "keyword": {
+                    "type": "keyword",
+                    "ignore_above": 256
+                }
+            }
+        },
+        "address_no": {
+            "type": "keyword"
+        },
         "some_const_keyword": {
             "type": "constant_keyword",
             "value": "random"
