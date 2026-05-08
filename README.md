@@ -54,6 +54,27 @@ To use a `config.yml`, copy `config.yml.template` to `config.yml` and fill in yo
 | `generation.seed`             | `ENV_GENERATE_SEED`         | Integer seed for reproducible generation (unset = random) | `None`                  |
 
 
+## Docker
+
+Build the image:
+
+```bash
+docker build -t random-elastic-data .
+```
+
+Run with environment variables (all `ENV_*` config options are supported):
+
+```bash
+docker run --rm \
+  -e ENV_ELASTIC_HOST=your-es-host \
+  -e ENV_ELASTIC_USER=elastic \
+  -e ENV_ELASTIC_PASS=secret \
+  -e ENV_GENERATE_NDOCS=10000 \
+  -e ENV_ELASTIC_MODE=replace \
+  random-elastic-data
+```
+
+
 ## Data sources
 
 `staedte_komplett.csv` is derived from the German municipality directory published by

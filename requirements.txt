@@ -1,0 +1,4 @@
+elasticsearch==9.4.0
+Faker==12.3.3
+faker-food==0.1.0
+PyYAML==6.0
