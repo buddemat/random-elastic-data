@@ -21,7 +21,11 @@ Python script that generates random data and stores it in Elasticsearch
 
 ### Requirements
 
-There are multiple `requirements.txt` files.
+Key dependencies: `elasticsearch`, `faker`, `faker-food`, `pyyaml`. Install with:
+
+```bash
+pip install elasticsearch faker faker-food pyyaml
+```
 
 ### Configuration
 
@@ -53,7 +57,7 @@ To use a `config.yml`, copy `config.yml.template` to `config.yml` and fill in yo
 ## Data sources
 
 `staedte_komplett.csv` is derived from the German municipality directory published by
-Statistisches Bundesamt (Destatis). Run `get_data.py` to re-download and regenerate it.
+Statistisches Bundesamt (Destatis).
 
 | | |
 |---|---|
