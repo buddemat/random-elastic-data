@@ -10,6 +10,10 @@ elastic:
     es_user: elastic
     es_pass: secret
     index_name: all_types_random-1
+    # number_of_shards: 1   # overrides auto-sizing; auto rounds to nearest multiple of data node count
+    # use_ilm: false        # set to true to use ILM with index template + write alias
+    # ilm_alias: all_types_random          # write alias (ILM mode only)
+    # ilm_rollover_docs: 50000000          # max docs per sub-index before rollover (ILM mode only)
     
 generation:
     n_documents: 1000

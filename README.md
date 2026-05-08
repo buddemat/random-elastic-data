@@ -40,6 +40,10 @@ To use a `config.yml`, copy `config.yml.template` to `config.yml` and fill in yo
 | `elastic.es_user`             | `ENV_ELASTIC_USER`          | ES username (no auth if unset)                           | `None`                   |
 | `elastic.es_pass`             | `ENV_ELASTIC_PASS`          | ES password (no auth if unset)                           | `None`                   |
 | `elastic.index_name`          | `ENV_ELASTIC_TARGETINDEX`   | Target index name                                        | `all_types_random-2`     |
+| `elastic.number_of_shards`    | `ENV_ELASTIC_SHARDS`        | Primary shard count (auto-sized from cluster + doc count if unset) | auto        |
+| `elastic.use_ilm`             | `ENV_ELASTIC_USEILM`        | Use ILM mode: lifecycle policy + index template + write alias | `false`           |
+| `elastic.ilm_alias`           | `ENV_ELASTIC_ILMALIAS`      | Write alias name (ILM mode only)                             | `all_types_random` |
+| `elastic.ilm_rollover_docs`   | `ENV_ELASTIC_ILMROLLOVERDOCS` | Max docs per sub-index before rollover (ILM mode only)     | `50000000`         |
 | `generation.n_documents`      | `ENV_GENERATE_NDOCS`        | Number of documents to generate                          | `1000`                   |
 | `generation.id_offset`        | `ENV_GENERATE_IDOFFSET`     | Numeric ID offset (for appending to an existing index)   | `0`                      |
 | `generation.cities_csv`       | `ENV_GENERATE_CITIESCSV`    | Path to the Destatis municipalities CSV                  | `staedte_komplett.csv`   |

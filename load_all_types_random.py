@@ -9,6 +9,7 @@ Date: 2023
 '''
 
 import logging
+import math
 import sys
 import os
 import json
@@ -24,6 +25,27 @@ import random_person as rp
 import city_provider as cp
 
 faker = Faker()
+
+# Rule-of-thumb constants for auto shard sizing.
+# Target ~167 GB/shard (bulk-analytics workload); ~6 KB stored per doc (3 KB raw × 2 for index overhead).
+_DOC_SIZE_KB = 6
+_TARGET_SHARD_GB = 167
+
+_DATA_ROLES = {'data', 'data_content', 'data_hot', 'data_warm', 'data_cold', 'data_frozen'}
+
+
+def _get_data_node_count(es_client):
+    nodes_info = es_client.nodes.info()
+    count = sum(1 for n in nodes_info['nodes'].values()
+                if _DATA_ROLES & set(n.get('roles', [])))
+    return max(1, count)
+
+
+def _compute_shards(n_docs, n_nodes=1):
+    ''' Auto-size: round up to nearest multiple of n_nodes, targeting _TARGET_SHARD_GB per shard. '''
+    total_gb = n_docs * _DOC_SIZE_KB / (1024 * 1024)
+    raw = max(n_nodes, math.ceil(total_gb / _TARGET_SHARD_GB))
+    return math.ceil(raw / n_nodes) * n_nodes
 
 
 def load_options():
@@ -48,6 +70,10 @@ def load_options():
     opt_dict['elastic']['es_user'] = env.get('ENV_ELASTIC_USER', None)
     opt_dict['elastic']['es_pass'] = env.get('ENV_ELASTIC_PASS', None)
     opt_dict['elastic']['index_name'] = env.get('ENV_ELASTIC_TARGETINDEX', 'all_types_random-2')
+    opt_dict['elastic']['number_of_shards'] = env.get('ENV_ELASTIC_SHARDS', None)
+    opt_dict['elastic']['use_ilm'] = env.get('ENV_ELASTIC_USEILM', False)
+    opt_dict['elastic']['ilm_alias'] = env.get('ENV_ELASTIC_ILMALIAS', 'all_types_random')
+    opt_dict['elastic']['ilm_rollover_docs'] = env.get('ENV_ELASTIC_ILMROLLOVERDOCS', 50_000_000)
 
     opt_dict['generation']['n_documents'] = env.get('ENV_GENERATE_NDOCS', 1000)
     opt_dict['generation']['id_offset'] = env.get('ENV_GENERATE_IDOFFSET', 0)
@@ -153,8 +179,9 @@ def document_stream(idx_name, amount, cities_csv=None, offset=0):
                           }
                }
 
-def init_es_index(es_client, idx_name, replace=False):
-    ''' create the initial index '''
+
+def init_es_index(es_client, idx_name, n_shards=1, replace=False):
+    ''' create a single index (simple mode) '''
     mylogger = logging.getLogger(__name__)
 
     if replace:
@@ -165,12 +192,68 @@ def init_es_index(es_client, idx_name, replace=False):
     with open('mapping.json', 'r', encoding='utf-8') as mapping_file:
         mapping = json.load(mapping_file)
 
-        mylogger.info('Creating index...')
-        response = es_client.options(ignore_status=[400]).indices.create(
-            index = idx_name,
-            mappings = mapping
-        )
-        return response
+    mylogger.info(f'Creating index with {n_shards} shard(s)...')
+    return es_client.options(ignore_status=[400]).indices.create(
+        index = idx_name,
+        mappings = mapping,
+        settings = {'number_of_shards': n_shards}
+    )
+
+
+def init_ilm_index(es_client, alias_name, rollover_docs, n_shards, replace=False):
+    ''' create ILM lifecycle policy, index template and bootstrap index '''
+    mylogger = logging.getLogger(__name__)
+
+    policy_name    = f'{alias_name}_policy'
+    template_name  = f'{alias_name}_template'
+    index_pattern  = f'{alias_name}-*'
+    bootstrap_name = f'{alias_name}-000001'
+
+    if replace:
+        mylogger.info(f'Deleting existing indices matching {index_pattern!r}...')
+        es_client.options(ignore_status=[400,404]).indices.delete(index=index_pattern)
+
+    mylogger.info(f'Creating ILM policy {policy_name!r}...')
+    es_client.ilm.put_lifecycle(
+        name=policy_name,
+        policy={
+            'phases': {
+                'hot': {
+                    'actions': {
+                        'rollover': {
+                            'max_docs': int(rollover_docs),
+                            'max_primary_shard_size': '50gb',
+                        }
+                    }
+                }
+            }
+        }
+    )
+
+    mylogger.info(f'Creating index template {template_name!r}...')
+    with open('mapping.json', 'r', encoding='utf-8') as mapping_file:
+        mapping = json.load(mapping_file)
+
+    es_client.indices.put_index_template(
+        name=template_name,
+        index_patterns=[index_pattern],
+        template={
+            'settings': {
+                'number_of_shards': n_shards,
+                'number_of_replicas': 0,
+                'index.lifecycle.name': policy_name,
+                'index.lifecycle.rollover_alias': alias_name,
+            },
+            'mappings': mapping,
+        },
+        priority=100
+    )
+
+    mylogger.info(f'Creating bootstrap index {bootstrap_name!r}...')
+    es_client.options(ignore_status=[400]).indices.create(
+        index=bootstrap_name,
+        aliases={alias_name: {'is_write_index': True}}
+    )
 
 
 def main():
@@ -196,13 +279,37 @@ def main():
                                               f'{options.get("elastic").get("es_pass")}')
                                   )
 
-    init_es_index(es_client, options.get('elastic').get('index_name'), replace=True)
+    n_data_nodes = _get_data_node_count(es_client)
+    mylogger.debug(f'Data nodes in cluster: {n_data_nodes}')
+
+    n_docs = int(options.get('generation').get('n_documents'))
+    shards_opt = options.get('elastic').get('number_of_shards')
+    n_shards = int(shards_opt) if shards_opt is not None else _compute_shards(n_docs, n_data_nodes)
+    mylogger.info(f'Shard count: {n_shards} '
+                  f'({"explicit" if shards_opt else f"auto, {n_data_nodes} data node(s)"}) '
+                  f'for {n_docs} documents.')
+
+    use_ilm = str(options.get('elastic').get('use_ilm')).lower() in ('true', '1', 'yes')
+    id_offset = int(options.get('generation').get('id_offset'))
+
+    if use_ilm:
+        alias = options.get('elastic').get('ilm_alias')
+        rollover_docs = options.get('elastic').get('ilm_rollover_docs')
+        init_ilm_index(es_client, alias, rollover_docs, n_shards, replace=(id_offset == 0))
+        if id_offset > 0:
+            mylogger.info(f'Rolling over alias {alias!r} for new batch...')
+            es_client.indices.rollover(alias=alias)
+        idx_target = alias
+    else:
+        init_es_index(es_client, options.get('elastic').get('index_name'),
+                      n_shards=n_shards, replace=True)
+        idx_target = options.get('elastic').get('index_name')
 
     mylogger.info('Generating and indexing documents...')
-    stream = document_stream(options.get('elastic').get('index_name'),
-                             options.get('generation').get('n_documents'),
+    stream = document_stream(idx_target,
+                             n_docs,
                              options.get('generation').get('cities_csv'),
-                             options.get('generation').get('id_offset'))
+                             id_offset)
 
     for status_ok, response in helpers.streaming_bulk(es_client, actions=stream):
         if not status_ok:
