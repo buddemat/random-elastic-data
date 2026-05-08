@@ -235,8 +235,7 @@ def _init_simple(es_client, idx_name, n_shards, mode):
     exists = bool(es_client.indices.exists(index=idx_name))
 
     if mode == 'abort' and exists:
-        stats = es_client.indices.stats(index=idx_name)
-        doc_count = stats['indices'][idx_name]['primaries']['docs']['count']
+        doc_count = es_client.count(index=idx_name)['count']
         mylogger.error(
             f'Index {idx_name!r} already exists ({doc_count} docs). '
             f'Use mode=replace or mode=resume.'
@@ -284,15 +283,13 @@ def _init_ilm(es_client, alias_name, rollover_docs, n_shards, mode):
         if alias_exists:
             alias_data = es_client.indices.get_alias(name=alias_name)
             for idx, info in alias_data.items():
-                stats = es_client.indices.stats(index=idx)
-                doc_count = stats['indices'][idx]['primaries']['docs']['count']
+                doc_count = es_client.count(index=idx)['count']
                 write_flag = ' [write]' if info['aliases'].get(alias_name, {}).get('is_write_index') else ''
                 found.append(f'  {idx}{write_flag}: {doc_count} docs')
         else:
             idx_info = es_client.indices.get(index=index_pattern)
             for idx in idx_info:
-                stats = es_client.indices.stats(index=idx)
-                doc_count = stats['indices'][idx]['primaries']['docs']['count']
+                doc_count = es_client.count(index=idx)['count']
                 found.append(f'  {idx}: {doc_count} docs (orphaned, no alias)')
         mylogger.error(
             f'Found existing data for {alias_name!r}:\n' +
@@ -312,8 +309,7 @@ def _init_ilm(es_client, alias_name, rollover_docs, n_shards, mode):
             None
         )
         if write_idx:
-            stats = es_client.indices.stats(index=write_idx)
-            write_docs = stats['indices'][write_idx]['primaries']['docs']['count']
+            write_docs = es_client.count(index=write_idx)['count']
             if write_docs > 0:
                 mylogger.info(f'Rolling over write index {write_idx!r} ({write_docs} docs)...')
                 es_client.indices.rollover(alias=alias_name)
