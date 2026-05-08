@@ -65,6 +65,58 @@ def _to_email_slug(s):
              .replace('ß', 'ss').replace(' ', '').replace('-', ''))
 
 
+def _make_neighborhood_polygon(home_lon, home_lat, side_km):
+    '''Rectilinear GeoJSON polygon (all right angles) with 4, 6, 8, 10 or 12 edges.
+
+    Starts with a bounding rectangle and notches 0–4 corners inward.
+    Each notch removes one corner vertex and adds three, giving +2 edges per notch.
+    Coordinates are in [lon, lat] order as required by GeoJSON / ES geo_shape.
+    '''
+    d_lat = side_km / 111
+    d_lon = side_km / (111 * math.cos(math.radians(home_lat)))
+
+    x0, x1 = home_lon - d_lon, home_lon + d_lon
+    y0, y1 = home_lat - d_lat, home_lat + d_lat
+    w,  h  = x1 - x0,          y1 - y0
+
+    n_cuts   = random.randint(0, 4)
+    cut_set  = set(random.sample(range(4), n_cuts))
+
+    def r(v): return round(v, 6)
+
+    # Traverse counter-clockwise: BL → BR → TR → TL
+    base = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+    vertices = []
+    for i, (cx, cy) in enumerate(base):
+        if i not in cut_set:
+            vertices.append((r(cx), r(cy)))
+            continue
+        fx = uniform(0.20, 0.45) * w
+        fy = uniform(0.20, 0.45) * h
+        if i == 0:    # BL: notch goes +x, +y
+            vertices += [(r(cx),      r(cy + fy)),
+                         (r(cx + fx), r(cy + fy)),
+                         (r(cx + fx), r(cy)     )]
+        elif i == 1:  # BR: notch goes -x, +y
+            vertices += [(r(cx - fx), r(cy)     ),
+                         (r(cx - fx), r(cy + fy)),
+                         (r(cx),      r(cy + fy))]
+        elif i == 2:  # TR: notch goes -x, -y
+            vertices += [(r(cx),      r(cy - fy)),
+                         (r(cx - fx), r(cy - fy)),
+                         (r(cx - fx), r(cy)     )]
+        else:         # TL: notch goes +x, -y
+            vertices += [(r(cx + fx), r(cy)     ),
+                         (r(cx + fx), r(cy - fy)),
+                         (r(cx),      r(cy - fy))]
+
+    vertices.append(vertices[0])  # close the ring
+    return {
+        'type': 'Polygon',
+        'coordinates': [[list(v) for v in vertices]],
+    }
+
+
 def _make_email(firstname, lastname, nickname, domain):
     first_slug = _to_email_slug(firstname)
     last_slug  = _to_email_slug(lastname)
@@ -125,15 +177,7 @@ class RandomPerson:
         self.city_location = {'lat': round(home_lat, 6), 'lon': round(home_lon, 6)}
 
         side_km = uniform(0.2, 1.5)
-        d_lat = side_km / 111
-        d_lon = side_km / (111 * math.cos(math.radians(home_lat)))
-        self.neighborhood = {
-            'type': 'envelope',
-            'coordinates': [
-                [round(home_lon - d_lon, 6), round(home_lat + d_lat, 6)],
-                [round(home_lon + d_lon, 6), round(home_lat - d_lat, 6)],
-            ],
-        }
+        self.neighborhood = _make_neighborhood_polygon(home_lon, home_lat, side_km)
 
         self.occupation = fake.job()
         self.interests = random.sample(INTERESTS, randint(2, 5))

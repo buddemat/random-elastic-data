@@ -80,15 +80,22 @@ def test_geo_point_in_germany(docs):
         assert 5.5 <= loc['lon'] <= 15.5, f"lon out of bounds: {loc['lon']}"
 
 
-def test_geo_shape_envelope(docs):
+def test_geo_shape_polygon(docs):
     for doc in docs:
         nb = doc['neighborhood']
-        assert nb['type'] == 'envelope'
-        coords = nb['coordinates']
-        assert len(coords) == 2
-        top_left, bottom_right = coords
-        assert top_left[0] < bottom_right[0], 'envelope: top-left lon should be west of bottom-right'
-        assert top_left[1] > bottom_right[1], 'envelope: top-left lat should be north of bottom-right'
+        assert nb['type'] == 'Polygon'
+        ring = nb['coordinates'][0]
+        # 0–4 corner notches → 4/6/8/10/12 edges → 5/7/9/11/13 ring entries (incl. closing vertex)
+        assert len(ring) in {5, 7, 9, 11, 13}, f'Unexpected ring length: {len(ring)}'
+        assert ring[0] == ring[-1], 'Ring not closed'
+        # All vertices must be right angles (rectilinear polygon)
+        n = len(ring) - 1
+        for j in range(n):
+            ax, ay = ring[j]
+            bx, by = ring[(j + 1) % n]
+            cx, cy = ring[(j + 2) % n]
+            dot = (bx - ax) * (cx - bx) + (by - ay) * (cy - by)
+            assert abs(dot) < 1e-8, f'Vertex {j + 1} is not a right angle (dot={dot})'
 
 
 def test_some_const_keyword(docs):
