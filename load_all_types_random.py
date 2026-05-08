@@ -175,8 +175,8 @@ def document_stream(idx_name, amount, cities_csv=None, offset=0):
 
     for num in range(offset+1, offset+amount+1):
         person = rp.RandomPerson(city_provider=provider)
-        if num%1000 == 0:
-            mylogger.debug(f'{num} documents generated...')
+        if (num - offset) % 1000 == 0:
+            mylogger.debug(f'{num - offset} documents generated...')
         yield {"_index": idx_name,
                "_source": { 'uuid': person.uuid,
                             'num_id': num,
