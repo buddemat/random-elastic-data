@@ -8,6 +8,7 @@ from load_all_types_random import document_stream
 
 SEED = 42
 N_DOCS = 20
+OFFSET = 50
 
 REQUIRED_FIELDS = [
     'uuid', 'num_id', 'created_at', 'firstname', 'lastname', 'nested_name',
@@ -30,6 +31,13 @@ def docs():
     random.seed(SEED)
     Faker.seed(SEED)
     return [doc['_source'] for doc in document_stream('test-idx', N_DOCS)]
+
+
+@pytest.fixture(scope='module')
+def docs_with_offset():
+    random.seed(SEED)
+    Faker.seed(SEED)
+    return [doc['_source'] for doc in document_stream('test-idx', N_DOCS, offset=OFFSET)]
 
 
 def test_field_presence(docs):
@@ -107,6 +115,14 @@ def test_nested_name_consistent(docs):
     for doc in docs:
         assert doc['nested_name']['first'] == doc['firstname']
         assert doc['nested_name']['last'] == doc['lastname']
+
+
+def test_offset_doc_count(docs_with_offset):
+    assert len(docs_with_offset) == N_DOCS
+
+
+def test_offset_num_id_sequence(docs_with_offset):
+    assert [doc['num_id'] for doc in docs_with_offset] == list(range(OFFSET + 1, OFFSET + N_DOCS + 1))
 
 
 def test_reproducibility(docs):
