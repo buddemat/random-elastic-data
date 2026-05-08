@@ -377,9 +377,15 @@ def main():
         idx_target = options.get('elastic').get('index_name')
         id_offset = _init_simple(es_client, idx_target, n_shards, mode)
 
-    mylogger.info('Generating and indexing documents...')
+    n_remaining = n_docs - id_offset
+    if n_remaining <= 0:
+        mylogger.info(f'Target of {n_docs} documents already reached ({id_offset} exist). Nothing to do.')
+        return
+
+    mylogger.info(f'Generating and indexing {n_remaining} document(s) '
+                  f'(target: {n_docs}, existing: {id_offset})...')
     stream = document_stream(idx_target,
-                             n_docs,
+                             n_remaining,
                              options.get('generation').get('cities_csv'),
                              id_offset)
 
