@@ -14,10 +14,10 @@ elastic:
     # use_ilm: false        # set to true to use ILM with index template + write alias
     # ilm_alias: all_types_random          # write alias (ILM mode only)
     # ilm_rollover_docs: 50000000          # max docs per sub-index before rollover (ILM mode only)
+    # mode: abort           # abort (default): fail if data exists | replace: wipe and recreate | resume: continue from max num_id
     
 generation:
     n_documents: 1000
-    id_offset: 0
     # cities_csv: /path/to/staedte_komplett.csv  # default: staedte_komplett.csv next to the script
     # seed: 42                                   # fix for reproducible output; unset = random
 

@@ -48,6 +48,50 @@ def _compute_shards(n_docs, n_nodes=1):
     return math.ceil(raw / n_nodes) * n_nodes
 
 
+def _get_max_num_id(es_client, index):
+    resp = es_client.search(index=index, size=0,
+                            aggs={'max_id': {'max': {'field': 'num_id'}}})
+    val = resp['aggregations']['max_id']['value']
+    return int(val) if val is not None else 0
+
+
+def _put_ilm_policy(es_client, policy_name, rollover_docs):
+    es_client.ilm.put_lifecycle(
+        name=policy_name,
+        policy={
+            'phases': {
+                'hot': {
+                    'actions': {
+                        'rollover': {
+                            'max_docs': int(rollover_docs),
+                            'max_primary_shard_size': '50gb',
+                        }
+                    }
+                }
+            }
+        }
+    )
+
+
+def _put_index_template(es_client, template_name, index_pattern, n_shards, policy_name, alias_name):
+    with open('mapping.json', 'r', encoding='utf-8') as f:
+        mapping = json.load(f)
+    es_client.indices.put_index_template(
+        name=template_name,
+        index_patterns=[index_pattern],
+        template={
+            'settings': {
+                'number_of_shards': n_shards,
+                'number_of_replicas': 0,
+                'index.lifecycle.name': policy_name,
+                'index.lifecycle.rollover_alias': alias_name,
+            },
+            'mappings': mapping,
+        },
+        priority=100
+    )
+
+
 def load_options():
     ''' load options from yaml file or environment vars '''
 
@@ -74,9 +118,9 @@ def load_options():
     opt_dict['elastic']['use_ilm'] = env.get('ENV_ELASTIC_USEILM', False)
     opt_dict['elastic']['ilm_alias'] = env.get('ENV_ELASTIC_ILMALIAS', 'all_types_random')
     opt_dict['elastic']['ilm_rollover_docs'] = env.get('ENV_ELASTIC_ILMROLLOVERDOCS', 50_000_000)
+    opt_dict['elastic']['mode'] = env.get('ENV_ELASTIC_MODE', 'abort')
 
     opt_dict['generation']['n_documents'] = env.get('ENV_GENERATE_NDOCS', 1000)
-    opt_dict['generation']['id_offset'] = env.get('ENV_GENERATE_IDOFFSET', 0)
     opt_dict['generation']['cities_csv'] = env.get('ENV_GENERATE_CITIESCSV', None)
     opt_dict['generation']['seed'] = env.get('ENV_GENERATE_SEED', None)
 
@@ -180,28 +224,47 @@ def document_stream(idx_name, amount, cities_csv=None, offset=0):
                }
 
 
-def init_es_index(es_client, idx_name, n_shards=1, replace=False):
-    ''' create a single index (simple mode) '''
+def _init_simple(es_client, idx_name, n_shards, mode):
+    ''' create or resume a single index; returns num_id offset '''
     mylogger = logging.getLogger(__name__)
 
-    if replace:
-        mylogger.info('Deleting (possibly) existing index...')
-        es_client.options(ignore_status=[400,404]).indices.delete(index=idx_name)
+    if mode not in ('replace', 'resume', 'abort'):
+        mylogger.error(f'Unknown mode {mode!r}. Valid values: replace, resume, abort.')
+        sys.exit(1)
+
+    exists = bool(es_client.indices.exists(index=idx_name))
+
+    if mode == 'abort' and exists:
+        stats = es_client.indices.stats(index=idx_name)
+        doc_count = stats['indices'][idx_name]['primaries']['docs']['count']
+        mylogger.error(
+            f'Index {idx_name!r} already exists ({doc_count} docs). '
+            f'Use mode=replace or mode=resume.'
+        )
+        sys.exit(1)
+
+    if mode == 'resume' and exists:
+        offset = _get_max_num_id(es_client, idx_name)
+        mylogger.info(f'Resuming index {idx_name!r} from num_id offset {offset}.')
+        return offset
+
+    if mode == 'replace':
+        mylogger.info(f'Deleting existing index {idx_name!r} if present...')
+        es_client.options(ignore_status=[400, 404]).indices.delete(index=idx_name)
 
     mylogger.info('Loading mapping...')
-    with open('mapping.json', 'r', encoding='utf-8') as mapping_file:
-        mapping = json.load(mapping_file)
-
-    mylogger.info(f'Creating index with {n_shards} shard(s)...')
-    return es_client.options(ignore_status=[400]).indices.create(
-        index = idx_name,
-        mappings = mapping,
-        settings = {'number_of_shards': n_shards}
+    with open('mapping.json', 'r', encoding='utf-8') as f:
+        mapping = json.load(f)
+    mylogger.info(f'Creating index {idx_name!r} with {n_shards} shard(s)...')
+    es_client.options(ignore_status=[400]).indices.create(
+        index=idx_name, mappings=mapping,
+        settings={'number_of_shards': n_shards}
     )
+    return 0
 
 
-def init_ilm_index(es_client, alias_name, rollover_docs, n_shards, replace=False):
-    ''' create ILM lifecycle policy, index template and bootstrap index '''
+def _init_ilm(es_client, alias_name, rollover_docs, n_shards, mode):
+    ''' create or resume an ILM-managed index set; returns num_id offset '''
     mylogger = logging.getLogger(__name__)
 
     policy_name    = f'{alias_name}_policy'
@@ -209,51 +272,68 @@ def init_ilm_index(es_client, alias_name, rollover_docs, n_shards, replace=False
     index_pattern  = f'{alias_name}-*'
     bootstrap_name = f'{alias_name}-000001'
 
-    if replace:
-        mylogger.info(f'Deleting existing indices matching {index_pattern!r}...')
-        es_client.options(ignore_status=[400,404]).indices.delete(index=index_pattern)
+    if mode not in ('replace', 'resume', 'abort'):
+        mylogger.error(f'Unknown mode {mode!r}. Valid values: replace, resume, abort.')
+        sys.exit(1)
+
+    alias_exists  = bool(es_client.indices.exists_alias(name=alias_name))
+    indices_exist = bool(es_client.indices.exists(index=index_pattern))
+
+    if mode == 'abort' and (alias_exists or indices_exist):
+        found = []
+        if alias_exists:
+            alias_data = es_client.indices.get_alias(name=alias_name)
+            for idx, info in alias_data.items():
+                stats = es_client.indices.stats(index=idx)
+                doc_count = stats['indices'][idx]['primaries']['docs']['count']
+                write_flag = ' [write]' if info['aliases'].get(alias_name, {}).get('is_write_index') else ''
+                found.append(f'  {idx}{write_flag}: {doc_count} docs')
+        else:
+            idx_info = es_client.indices.get(index=index_pattern)
+            for idx in idx_info:
+                stats = es_client.indices.stats(index=idx)
+                doc_count = stats['indices'][idx]['primaries']['docs']['count']
+                found.append(f'  {idx}: {doc_count} docs (orphaned, no alias)')
+        mylogger.error(
+            f'Found existing data for {alias_name!r}:\n' +
+            '\n'.join(found) +
+            '\nUse mode=replace or mode=resume.'
+        )
+        sys.exit(1)
+
+    if mode == 'resume' and alias_exists:
+        _put_ilm_policy(es_client, policy_name, rollover_docs)
+        _put_index_template(es_client, template_name, index_pattern, n_shards, policy_name, alias_name)
+        offset = _get_max_num_id(es_client, alias_name)
+        alias_data = es_client.indices.get_alias(name=alias_name)
+        write_idx = next(
+            (name for name, info in alias_data.items()
+             if info['aliases'].get(alias_name, {}).get('is_write_index')),
+            None
+        )
+        if write_idx:
+            stats = es_client.indices.stats(index=write_idx)
+            write_docs = stats['indices'][write_idx]['primaries']['docs']['count']
+            if write_docs > 0:
+                mylogger.info(f'Rolling over write index {write_idx!r} ({write_docs} docs)...')
+                es_client.indices.rollover(alias=alias_name)
+        mylogger.info(f'Resuming alias {alias_name!r} from num_id offset {offset}.')
+        return offset
+
+    if mode == 'replace':
+        mylogger.info(f'Deleting existing indices matching {index_pattern!r} if present...')
+        es_client.options(ignore_status=[400, 404]).indices.delete(index=index_pattern)
 
     mylogger.info(f'Creating ILM policy {policy_name!r}...')
-    es_client.ilm.put_lifecycle(
-        name=policy_name,
-        policy={
-            'phases': {
-                'hot': {
-                    'actions': {
-                        'rollover': {
-                            'max_docs': int(rollover_docs),
-                            'max_primary_shard_size': '50gb',
-                        }
-                    }
-                }
-            }
-        }
-    )
-
+    _put_ilm_policy(es_client, policy_name, rollover_docs)
     mylogger.info(f'Creating index template {template_name!r}...')
-    with open('mapping.json', 'r', encoding='utf-8') as mapping_file:
-        mapping = json.load(mapping_file)
-
-    es_client.indices.put_index_template(
-        name=template_name,
-        index_patterns=[index_pattern],
-        template={
-            'settings': {
-                'number_of_shards': n_shards,
-                'number_of_replicas': 0,
-                'index.lifecycle.name': policy_name,
-                'index.lifecycle.rollover_alias': alias_name,
-            },
-            'mappings': mapping,
-        },
-        priority=100
-    )
-
+    _put_index_template(es_client, template_name, index_pattern, n_shards, policy_name, alias_name)
     mylogger.info(f'Creating bootstrap index {bootstrap_name!r}...')
     es_client.options(ignore_status=[400]).indices.create(
         index=bootstrap_name,
         aliases={alias_name: {'is_write_index': True}}
     )
+    return 0
 
 
 def main():
@@ -289,21 +369,17 @@ def main():
                   f'({"explicit" if shards_opt else f"auto, {n_data_nodes} data node(s)"}) '
                   f'for {n_docs} documents.')
 
+    mode = str(options.get('elastic').get('mode')).lower()
     use_ilm = str(options.get('elastic').get('use_ilm')).lower() in ('true', '1', 'yes')
-    id_offset = int(options.get('generation').get('id_offset'))
 
     if use_ilm:
         alias = options.get('elastic').get('ilm_alias')
         rollover_docs = options.get('elastic').get('ilm_rollover_docs')
-        init_ilm_index(es_client, alias, rollover_docs, n_shards, replace=(id_offset == 0))
-        if id_offset > 0:
-            mylogger.info(f'Rolling over alias {alias!r} for new batch...')
-            es_client.indices.rollover(alias=alias)
+        id_offset = _init_ilm(es_client, alias, rollover_docs, n_shards, mode)
         idx_target = alias
     else:
-        init_es_index(es_client, options.get('elastic').get('index_name'),
-                      n_shards=n_shards, replace=True)
         idx_target = options.get('elastic').get('index_name')
+        id_offset = _init_simple(es_client, idx_target, n_shards, mode)
 
     mylogger.info('Generating and indexing documents...')
     stream = document_stream(idx_target,

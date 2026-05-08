@@ -48,8 +48,8 @@ To use a `config.yml`, copy `config.yml.template` to `config.yml` and fill in yo
 | `elastic.use_ilm`             | `ENV_ELASTIC_USEILM`        | Use ILM mode: lifecycle policy + index template + write alias | `false`           |
 | `elastic.ilm_alias`           | `ENV_ELASTIC_ILMALIAS`      | Write alias name (ILM mode only)                             | `all_types_random` |
 | `elastic.ilm_rollover_docs`   | `ENV_ELASTIC_ILMROLLOVERDOCS` | Max docs per sub-index before rollover (ILM mode only)     | `50000000`         |
+| `elastic.mode`                | `ENV_ELASTIC_MODE`          | `abort`: fail if data exists; `replace`: wipe and recreate; `resume`: continue from max `num_id` | `abort` |
 | `generation.n_documents`      | `ENV_GENERATE_NDOCS`        | Number of documents to generate                          | `1000`                   |
-| `generation.id_offset`        | `ENV_GENERATE_IDOFFSET`     | Numeric ID offset (for appending to an existing index)   | `0`                      |
 | `generation.cities_csv`       | `ENV_GENERATE_CITIESCSV`    | Path to the Destatis municipalities CSV                  | `staedte_komplett.csv`   |
 | `generation.seed`             | `ENV_GENERATE_SEED`         | Integer seed for reproducible generation (unset = random) | `None`                  |
 
