@@ -358,7 +358,7 @@ def main():
     n_data_nodes = _get_data_node_count(es_client)
     mylogger.debug(f'Data nodes in cluster: {n_data_nodes}')
 
-    n_docs = int(options.get('generation').get('n_documents'))
+    n_docs = int(float(options.get('generation').get('n_documents')))
     shards_opt = options.get('elastic').get('number_of_shards')
     n_shards = int(shards_opt) if shards_opt is not None else _compute_shards(n_docs, n_data_nodes)
     mylogger.info(f'Shard count: {n_shards} '
