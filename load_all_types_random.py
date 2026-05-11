@@ -63,7 +63,7 @@ def _put_ilm_policy(es_client, policy_name, rollover_docs):
                 'hot': {
                     'actions': {
                         'rollover': {
-                            'max_docs': int(rollover_docs),
+                            'max_docs': int(float(rollover_docs)),
                             'max_primary_shard_size': '50gb',
                         }
                     }
